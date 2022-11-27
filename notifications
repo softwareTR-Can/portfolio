@@ -1,0 +1,117 @@
+// Package imports:
+import 'dart:convert';
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:http/http.dart' as http;
+
+const simpleTaskKey = "simpleTask";
+const rescheduledTaskKey = "rescheduledTask";
+const failedTaskKey = "failedTask";
+const simpleDelayedTask = "simpleDelayedTask";
+const simplePeriodicTask = "simplePeriodicTask";
+const simplePeriodic1HourTask = "simplePeriodic1HourTask";
+
+class NotificationController extends GetxController {
+  AwesomeNotifications notifications = AwesomeNotifications();
+
+  init() async {
+    if (!await notifications.isNotificationAllowed()) {
+      notifications.requestPermissionToSendNotifications();
+    }
+    await notifications.initialize(null, [
+      NotificationChannel(
+          channelKey: 'basic_channel',
+          channelName: 'Basic notifications',
+          channelDescription: 'Notification channel for basic tests',
+          defaultColor: Color(0xFF9D50DD),
+          ledColor: Colors.white)
+    ]);
+    update();
+  }
+
+  createNotification() {
+    notifications.createNotification(
+        content: NotificationContent(id: -, channelKey: 'basic_channel', title: '', body: ''),
+        actionButtons: [NotificationActionButton(label: "")]);
+    update();
+  }
+
+  frequencyNotificationControlInit() async {
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: false,
+    );
+    Workmanager().registerPeriodicTask(
+      "3",
+      simplePeriodicTask,
+      frequency: Duration(minutes: 15),
+      initialDelay: Duration(seconds: 15),
+    );
+    Workmanager().registerPeriodicTask(
+      "15",
+      simplePeriodicTask,
+      frequency: Duration(minutes: 15),
+      initialDelay: Duration(minutes: 5),
+    );
+    Workmanager().registerPeriodicTask(
+      "14",
+      simplePeriodicTask,
+      frequency: Duration(minutes: 15),
+      initialDelay: Duration(minutes: 10),
+    );
+    update();
+  }
+}
+
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    switch (task) {
+      case simpleTaskKey:
+        print("$simpleTaskKey was executed. inputData = $inputData");
+        print("Bool from prefs: ");
+        break;
+      case rescheduledTaskKey:
+        final key = inputData['key'];
+
+        print('reschedule task');
+        return false;
+
+      case failedTaskKey:
+        print('failed task');
+        return Future.error('failed');
+      case simpleDelayedTask:
+        print("$simpleDelayedTask was executed");
+        break;
+      case simplePeriodicTask:
+        try {
+          var response = await http.get("https://--*********--/notification.json");
+          AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                  id: -,
+                  channelKey: 'basic_channel',
+                  title: json.decode(response.body)["title"],
+                  body: json.decode(response.body)["desc"],
+                  notificationLayout: NotificationLayout.BigPicture,
+                  bigPicture: json.decode(response.body)["image"]));
+        } catch (e) {
+          AwesomeNotifications().createNotification(
+              content: NotificationContent(id: 10, channelKey: 'basic_channel', title: "hata meydana geldi", body: e.toString()));
+        }
+
+        print("$simplePeriodicTask was executed");
+        break;
+      case simplePeriodic1HourTask:
+        print("$simplePeriodic1HourTask was executed");
+        break;
+      case Workmanager.iOSBackgroundTask:
+        print("The iOS background fetch was triggered");
+        print("You can access other plugins in the background, for example Directory.getTemporaryDirectory(): ");
+        break;
+    }
+
+    return Future.value(true);
+  });
+}
